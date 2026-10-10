@@ -103,7 +103,7 @@ Set the `authToken` variable to the token returned by `app:create-user`.
 | Command                    | Description                                                                                       |
 |----------------------------|---------------------------------------------------------------------------------------------------|
 | `app:create-user`          | Creates a user and returns an API token. Use this token when testing endpoints (e.g. in Postman). |
-| `app:process-transactions` | Processes pending transactions — either approves or rejects them.                                 |
+| `app:process-transactions` | Completes pending transfers. Transfers above 15 000 EUR wait for the owner's decision: run the command interactively to approve or reject them (non-interactive runs skip them). |
 | `app:company-wallet`       | Displays the company wallets and shows how much the company has earned.                           |
 
 **How to run a console command:**

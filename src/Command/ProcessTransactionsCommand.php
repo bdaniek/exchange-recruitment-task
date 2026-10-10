@@ -46,6 +46,12 @@ final class ProcessTransactionsCommand extends Command
             }
         }
 
+        if ([] !== $fraudReview && !$input->isInteractive()) {
+            $io->note(sprintf('%d transaction(s) await fraud review. Run this command interactively to review them.', count($fraudReview)));
+
+            return Command::SUCCESS;
+        }
+
         foreach ($fraudReview as $transaction) {
             $io->section(sprintf('Fraud review — Transaction #%d', $transaction->getId()));
             $io->definitionList(
@@ -57,7 +63,7 @@ final class ProcessTransactionsCommand extends Command
                 ['Created at' => $transaction->getCreatedAt()->format('Y-m-d H:i:s')],
             );
 
-            $approved = $io->confirm('Approve this transaction?');
+            $approved = $io->confirm('Approve this transaction?', false);
 
             if ($approved) {
                 $this->transactionProcessorService->complete($transaction);
