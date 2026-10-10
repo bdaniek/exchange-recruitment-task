@@ -70,7 +70,7 @@ class Wallet
 
     public function setBalance(float $balance): void
     {
-        $this->balance = $balance;
+        $this->balance = round($balance, 4);
     }
 
     public function setIsBlocked(bool $isBlocked): void

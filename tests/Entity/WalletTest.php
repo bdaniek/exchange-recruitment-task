@@ -56,4 +56,16 @@ class WalletTest extends TestCase
 
         $this->assertNull($wallet->getLastActivityAt());
     }
+
+    public function testSetBalanceRoundsToFourDecimals(): void
+    {
+        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
+        $wallet->setBalance(0.1 + 0.2);
+
+        $this->assertSame(0.3, $wallet->getBalance());
+
+        $wallet->setBalance(10.123456);
+
+        $this->assertSame(10.1235, $wallet->getBalance());
+    }
 }
