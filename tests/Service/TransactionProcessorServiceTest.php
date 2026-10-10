@@ -8,6 +8,7 @@ use App\Entity\Transaction;
 use App\Entity\Wallet;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Repository\CompanyWalletRepositoryInterface;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\TransactionProcessorService;
@@ -19,16 +20,19 @@ class TransactionProcessorServiceTest extends TestCase
 {
     private WalletRepositoryInterface $walletRepository;
     private TransactionRepositoryInterface $transactionRepository;
+    private CompanyWalletRepositoryInterface $companyWalletRepository;
     private TransactionProcessorService $transactionProcessorService;
 
     protected function setUp(): void
     {
         $this->walletRepository = $this->createMock(WalletRepositoryInterface::class);
         $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
+        $this->companyWalletRepository = $this->createMock(CompanyWalletRepositoryInterface::class);
 
         $this->transactionProcessorService = new TransactionProcessorService(
             $this->walletRepository,
             $this->transactionRepository,
+            $this->companyWalletRepository,
         );
     }
 
@@ -53,6 +57,11 @@ class TransactionProcessorServiceTest extends TestCase
             ->expects(self::once())
             ->method('save')
             ->with($toWallet);
+
+        $this->companyWalletRepository
+            ->expects(self::once())
+            ->method('addToBalance')
+            ->with(Currency::EUR, '0.5000');
 
         $this->transactionRepository
             ->expects(self::once())
@@ -90,6 +99,34 @@ class TransactionProcessorServiceTest extends TestCase
         self::assertNotNull($transaction->getAntiFraudCheckedAt());
     }
 
+    public function testCompleteDoesNotTouchCompanyWalletWhenSpreadIsZero(): void
+    {
+        $transaction = Transaction::create(
+            fromWalletId: 1,
+            toWalletId: 2,
+            fromAmount: '100.0000',
+            toAmount: '100.0000',
+            fromCurrency: Currency::PLN,
+            toCurrency: Currency::PLN,
+            spread: '0.00',
+            exchangeRate: '1.000000',
+            requiresAntiFraudCheck: false,
+        );
+
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, Wallet::create(1, Currency::PLN)],
+                [2, Wallet::create(1, Currency::PLN)],
+            ]);
+
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
+
+        $this->transactionProcessorService->complete($transaction);
+
+        self::assertSame(TransactionStatus::COMPLETED, $transaction->getStatus());
+    }
+
     public function testCompleteRejectsWhenFromWalletNotFound(): void
     {
         $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
@@ -102,6 +139,7 @@ class TransactionProcessorServiceTest extends TestCase
             ]);
 
         $this->walletRepository->expects(self::never())->method('save');
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
 
         $this->transactionProcessorService->complete($transaction);
 
