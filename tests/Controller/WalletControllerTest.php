@@ -13,6 +13,7 @@ use App\Enum\TransactionStatus;
 use App\Exception\InsufficientFundsException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletCannotBeDeletedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\DepositService;
@@ -477,5 +478,44 @@ class WalletControllerTest extends TestCase
             $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
             self::assertSame('Invalid JSON body.', $data['error']);
         }
+    }
+
+    public function testDeleteReturnsNoContent(): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $this->walletService
+            ->expects(self::once())
+            ->method('deleteWallet')
+            ->with(1, 7);
+
+        $response = $this->controller->delete(7, $user);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame('', $response->getContent());
+    }
+
+    public static function deleteErrorProvider(): iterable
+    {
+        yield 'not found' => [new WalletNotFoundException(7), 404];
+        yield 'cannot be deleted' => [new WalletCannotBeDeletedException(7, 'balance is not zero'), 409];
+        yield 'blocked' => [new WalletBlockedException(7), 422];
+    }
+
+    #[DataProvider('deleteErrorProvider')]
+    public function testDeleteReturnsErrorStatus(Throwable $exception, int $expectedStatus): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $this->walletService
+            ->method('deleteWallet')
+            ->willThrowException($exception);
+
+        $response = $this->controller->delete(7, $user);
+
+        self::assertSame($expectedStatus, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($exception->getMessage(), $data['error']);
     }
 }

@@ -68,4 +68,15 @@ class WalletTest extends TestCase
 
         $this->assertSame(10.1235, $wallet->getBalance());
     }
+
+    public function testMarkDeleted(): void
+    {
+        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
+
+        $this->assertNull($wallet->getDeletedAt());
+
+        $wallet->markDeleted();
+
+        $this->assertNotNull($wallet->getDeletedAt());
+    }
 }

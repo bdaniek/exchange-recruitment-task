@@ -17,6 +17,7 @@ class Wallet
         private bool $isBlocked,
         private ?DateTimeImmutable $lastActivityAt,
         private readonly DateTimeImmutable $createdAt,
+        private ?DateTimeImmutable $deletedAt = null,
     ) {
     }
 
@@ -81,5 +82,15 @@ class Wallet
     public function setLastActivityAt(?DateTimeImmutable $lastActivityAt): void
     {
         $this->lastActivityAt = $lastActivityAt;
+    }
+
+    public function getDeletedAt(): ?DateTimeImmutable
+    {
+        return $this->deletedAt;
+    }
+
+    public function markDeleted(): void
+    {
+        $this->deletedAt = new DateTimeImmutable();
     }
 }

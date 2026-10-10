@@ -11,6 +11,7 @@ use App\Enum\Currency;
 use App\Exception\InsufficientFundsException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletCannotBeDeletedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\DepositService;
@@ -67,6 +68,22 @@ final class WalletController extends AbstractController
         }
 
         return new JsonResponse(new WalletResponse($wallet), Response::HTTP_CREATED);
+    }
+
+    #[Route('/{id}', requirements: ['id' => '\d+'], methods: ['DELETE'])]
+    public function delete(int $id, #[CurrentUser] User $user): Response
+    {
+        try {
+            $this->walletService->deleteWallet($user->getIdNotNull(), $id);
+        } catch (WalletNotFoundException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (WalletCannotBeDeletedException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
+        } catch (WalletBlockedException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
     #[Route('/transfer', methods: ['POST'])]
