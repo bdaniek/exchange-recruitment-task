@@ -20,6 +20,7 @@ use App\Service\TransferService;
 use App\Service\WalletService;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Throwable;
@@ -112,6 +113,19 @@ class WalletControllerTest extends TestCase
         $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
 
         $request = new Request(content: json_encode(['currency' => 'INVALID'], JSON_THROW_ON_ERROR));
+        $response = $this->controller->create($request, $user);
+
+        self::assertSame(400, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('Invalid currency.', $data['error']);
+    }
+
+    public function testCreateReturnsBadRequestWhenCurrencyIsNotAString(): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $request = new Request(content: json_encode(['currency' => 123], JSON_THROW_ON_ERROR));
         $response = $this->controller->create($request, $user);
 
         self::assertSame(400, $response->getStatusCode());
@@ -437,5 +451,31 @@ class WalletControllerTest extends TestCase
 
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('Wallet 5 is blocked.', $data['error']);
+    }
+
+    public static function invalidJsonProvider(): iterable
+    {
+        yield 'empty body' => [''];
+        yield 'malformed json' => ['{"amount":'];
+        yield 'not an object' => ['"100"'];
+    }
+
+    #[DataProvider('invalidJsonProvider')]
+    public function testEndpointsReturnBadRequestForInvalidJson(string $content): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $responses = [
+            $this->controller->create(new Request(content: $content), $user),
+            $this->controller->transfer(new Request(content: $content), $user),
+            $this->controller->deposit(1, new Request(content: $content), $user),
+        ];
+
+        foreach ($responses as $response) {
+            self::assertSame(400, $response->getStatusCode());
+
+            $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame('Invalid JSON body.', $data['error']);
+        }
     }
 }
