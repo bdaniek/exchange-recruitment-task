@@ -100,8 +100,8 @@ final class WalletController extends AbstractController
             }
         }
 
-        if (!is_numeric($data['amount']) || (float) $data['amount'] <= 0) {
-            return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
+        if (!$this->isValidAmount($data['amount'])) {
+            return new JsonResponse(['error' => 'Amount must be a positive number with at most 4 decimal places.'], Response::HTTP_BAD_REQUEST);
         }
 
         if ((int) $data['fromWalletId'] === (int) $data['toWalletId']) {
@@ -136,8 +136,8 @@ final class WalletController extends AbstractController
             return new JsonResponse(['error' => 'Missing required field: amount.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if (!is_numeric($data['amount']) || (float) $data['amount'] <= 0) {
-            return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
+        if (!$this->isValidAmount($data['amount'])) {
+            return new JsonResponse(['error' => 'Amount must be a positive number with at most 4 decimal places.'], Response::HTTP_BAD_REQUEST);
         }
 
         if ((float) $data['amount'] > DepositService::MAX_AMOUNT) {
@@ -157,6 +157,13 @@ final class WalletController extends AbstractController
         }
 
         return new JsonResponse(new WalletResponse($wallet));
+    }
+
+    private function isValidAmount(mixed $amount): bool
+    {
+        return is_numeric($amount)
+            && 1 === preg_match('/^\d+(\.\d{1,4})?\z/', (string) $amount)
+            && (float) $amount > 0;
     }
 
     private function decodeJson(Request $request): ?array

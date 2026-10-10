@@ -86,6 +86,8 @@ docker exec -it php-fpm composer tests
 
 All endpoints require Bearer token authentication. Obtain a token with `app:create-user`.
 
+Amounts are positive numbers with at most 4 decimal places.
+
 | Method | Path                        | Description                                                                                                                                                                            |
 |--------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user.                                                                                                                                  |

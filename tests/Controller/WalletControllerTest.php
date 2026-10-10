@@ -258,7 +258,7 @@ class WalletControllerTest extends TestCase
         self::assertSame(400, $response->getStatusCode());
 
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('Amount must be a positive number.', $data['error']);
+        self::assertSame('Amount must be a positive number with at most 4 decimal places.', $data['error']);
     }
 
     /**
@@ -395,7 +395,7 @@ class WalletControllerTest extends TestCase
         self::assertSame(400, $response->getStatusCode());
 
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('Amount must be a positive number.', $data['error']);
+        self::assertSame('Amount must be a positive number with at most 4 decimal places.', $data['error']);
     }
 
     /**
@@ -517,5 +517,64 @@ class WalletControllerTest extends TestCase
 
         $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame($exception->getMessage(), $data['error']);
+    }
+
+    public static function invalidAmountProvider(): iterable
+    {
+        yield 'zero' => ['0'];
+        yield 'too many decimal places' => ['10.12345'];
+        yield 'exponent' => ['1e3'];
+        yield 'leading space' => [' 10'];
+        yield 'trailing newline' => ["10\n"];
+        yield 'boolean' => [true];
+    }
+
+    #[DataProvider('invalidAmountProvider')]
+    public function testTransferAndDepositRejectInvalidAmount(mixed $amount): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $this->transferService->expects(self::never())->method('transfer');
+        $this->depositService->expects(self::never())->method('deposit');
+
+        $transferRequest = new Request(content: json_encode([
+            'fromWalletId' => 1,
+            'toWalletId' => 2,
+            'amount' => $amount,
+        ], JSON_THROW_ON_ERROR));
+        $depositRequest = new Request(content: json_encode(['amount' => $amount], JSON_THROW_ON_ERROR));
+
+        self::assertSame(400, $this->controller->transfer($transferRequest, $user)->getStatusCode());
+        self::assertSame(400, $this->controller->deposit(1, $depositRequest, $user)->getStatusCode());
+    }
+
+    public function testTransferAcceptsAmountWithFourDecimalPlaces(): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+        $transaction = Transaction::create(
+            fromWalletId: 1,
+            toWalletId: 2,
+            fromAmount: '10.1234',
+            toAmount: '2.5000',
+            fromCurrency: Currency::PLN,
+            toCurrency: Currency::EUR,
+            spread: '0.01',
+            exchangeRate: '0.250000',
+            requiresAntiFraudCheck: false,
+        );
+
+        $this->transferService
+            ->expects(self::once())
+            ->method('transfer')
+            ->with(1, 1, 2, '10.1234')
+            ->willReturn($transaction);
+
+        $request = new Request(content: json_encode([
+            'fromWalletId' => 1,
+            'toWalletId' => 2,
+            'amount' => '10.1234',
+        ], JSON_THROW_ON_ERROR));
+
+        self::assertSame(201, $this->controller->transfer($request, $user)->getStatusCode());
     }
 }
