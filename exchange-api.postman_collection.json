@@ -1,0 +1,138 @@
+{
+  "info": {
+    "name": "Exchange API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Wallets",
+      "item": [
+        {
+          "name": "List Wallets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallets"]
+            },
+            "description": "Returns all wallets belonging to the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"PLN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallets"]
+            },
+            "description": "Creates a new wallet for the authenticated user. Supported currencies: PLN, EUR, USD, GBP, JPY, CHF, HUF. Returns 409 if a wallet for that currency already exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"500.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallets/1/deposit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallets", "1", "deposit"]
+            },
+            "description": "Deposits funds into the specified wallet. Maximum single deposit: 10000. Returns 422 if the wallet is blocked."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transfers",
+      "item": [
+        {
+          "name": "Transfer Between Wallets",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromWalletId\": 1,\n  \"toWalletId\": 2,\n  \"amount\": \"100.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallets/transfer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallets", "transfer"]
+            },
+            "description": "Transfers funds between two wallets of the authenticated user. Supports currency exchange. Both wallets must belong to the authenticated user."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
