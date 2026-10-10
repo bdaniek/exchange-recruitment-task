@@ -27,6 +27,10 @@ final readonly class TransactionProcessorService
         $this->connection->transactional(function () use ($transaction): void {
             $this->walletRepository->lockByIds($transaction->getFromWalletId(), $transaction->getToWalletId());
 
+            if (!$this->isUnprocessed($transaction)) {
+                return;
+            }
+
             $fromWallet = $this->walletRepository->findById($transaction->getFromWalletId());
             $toWallet = $this->walletRepository->findById($transaction->getToWalletId());
 
@@ -59,6 +63,10 @@ final readonly class TransactionProcessorService
         $this->connection->transactional(function () use ($transaction): void {
             $this->walletRepository->lockByIds($transaction->getFromWalletId());
 
+            if (!$this->isUnprocessed($transaction)) {
+                return;
+            }
+
             $fromWallet = $this->walletRepository->findById($transaction->getFromWalletId());
             if (null !== $fromWallet) {
                 $fromWallet->setBalance($fromWallet->getBalance() + (float) $transaction->getFromAmount());
@@ -74,5 +82,13 @@ final readonly class TransactionProcessorService
 
             $this->transactionRepository->save($transaction);
         });
+    }
+
+    private function isUnprocessed(Transaction $transaction): bool
+    {
+        $current = $this->transactionRepository->findById((int) $transaction->getId());
+
+        return null !== $current
+            && in_array($current->getStatus(), [TransactionStatus::PENDING, TransactionStatus::FRAUD_REVIEW], true);
     }
 }

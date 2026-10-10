@@ -30,6 +30,9 @@ class TransactionProcessorServiceTest extends TestCase
         $this->walletRepository = $this->createMock(WalletRepositoryInterface::class);
         $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
         $this->companyWalletRepository = $this->createMock(CompanyWalletRepositoryInterface::class);
+        $this->transactionRepository
+            ->method('findById')
+            ->willReturn($this->makeTransaction(requiresAntiFraudCheck: false));
 
         $this->transactionProcessorService = new TransactionProcessorService(
             $this->walletRepository,
@@ -220,6 +223,49 @@ class TransactionProcessorServiceTest extends TestCase
 
         self::assertSame(TransactionStatus::REJECTED, $transaction->getStatus());
         self::assertNotNull($transaction->getAntiFraudCheckedAt());
+    }
+
+    public function testCompleteSkipsAlreadyProcessedTransaction(): void
+    {
+        $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
+        $service = $this->createServiceForProcessedTransaction();
+
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $service->complete($transaction);
+
+        self::assertSame(TransactionStatus::PENDING, $transaction->getStatus());
+    }
+
+    public function testRejectSkipsAlreadyProcessedTransaction(): void
+    {
+        $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
+        $service = $this->createServiceForProcessedTransaction();
+
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $service->reject($transaction);
+
+        self::assertSame(TransactionStatus::PENDING, $transaction->getStatus());
+    }
+
+    private function createServiceForProcessedTransaction(): TransactionProcessorService
+    {
+        $processed = $this->makeTransaction(requiresAntiFraudCheck: false);
+        $processed->setStatus(TransactionStatus::COMPLETED);
+
+        $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
+        $this->transactionRepository->method('findById')->willReturn($processed);
+
+        return new TransactionProcessorService(
+            $this->walletRepository,
+            $this->transactionRepository,
+            $this->companyWalletRepository,
+            $this->createConnection(),
+        );
     }
 
     private function makeTransaction(bool $requiresAntiFraudCheck): Transaction

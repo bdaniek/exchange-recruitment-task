@@ -66,6 +66,9 @@ class ProcessTransactionsCommandTest extends TestCase
                 [TransactionStatus::PENDING, $pending],
                 [TransactionStatus::FRAUD_REVIEW, $fraudReview],
             ]);
+        $transactionRepository
+            ->method('findById')
+            ->willReturn($this->makeTransaction(requiresAntiFraudCheck: false));
 
         $walletRepository = $this->createStub(WalletRepositoryInterface::class);
         $walletRepository
