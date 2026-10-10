@@ -29,13 +29,8 @@ final readonly class TransactionProcessorService
             return;
         }
 
-        $fromWallet->setBalance($fromWallet->getBalance() - (float) $transaction->getFromAmount());
-        $fromWallet->setLastActivityAt(new DateTimeImmutable());
-
         $toWallet->setBalance($toWallet->getBalance() + (float) $transaction->getToAmount());
         $toWallet->setLastActivityAt(new DateTimeImmutable());
-
-        $this->walletRepository->save($fromWallet);
         $this->walletRepository->save($toWallet);
 
         $transaction->setStatus(TransactionStatus::COMPLETED);
@@ -49,6 +44,13 @@ final readonly class TransactionProcessorService
 
     public function reject(Transaction $transaction): void
     {
+        $fromWallet = $this->walletRepository->findById($transaction->getFromWalletId());
+        if (null !== $fromWallet) {
+            $fromWallet->setBalance($fromWallet->getBalance() + (float) $transaction->getFromAmount());
+            $fromWallet->setLastActivityAt(new DateTimeImmutable());
+            $this->walletRepository->save($fromWallet);
+        }
+
         $transaction->setStatus(TransactionStatus::REJECTED);
 
         if ($transaction->requiresAntiFraudCheck()) {

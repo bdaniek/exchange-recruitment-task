@@ -50,9 +50,9 @@ class TransactionProcessorServiceTest extends TestCase
             ]);
 
         $this->walletRepository
-            ->expects(self::exactly(2))
+            ->expects(self::once())
             ->method('save')
-            ->with($this->isInstanceOf(Wallet::class));
+            ->with($toWallet);
 
         $this->transactionRepository
             ->expects(self::once())
@@ -61,9 +61,8 @@ class TransactionProcessorServiceTest extends TestCase
 
         $this->transactionProcessorService->complete($transaction);
 
-        self::assertSame(400.0, $fromWallet->getBalance());
+        self::assertSame(500.0, $fromWallet->getBalance());
         self::assertSame(125.0, $toWallet->getBalance());
-        self::assertNotNull($fromWallet->getLastActivityAt());
         self::assertNotNull($toWallet->getLastActivityAt());
         self::assertSame(TransactionStatus::COMPLETED, $transaction->getStatus());
         self::assertNull($transaction->getAntiFraudCheckedAt());
@@ -123,18 +122,23 @@ class TransactionProcessorServiceTest extends TestCase
                 [2, null],
             ]);
 
-        $this->walletRepository->expects(self::never())->method('save');
+        $this->walletRepository
+            ->expects(self::once())
+            ->method('save')
+            ->with($fromWallet);
 
         $this->transactionProcessorService->complete($transaction);
 
+        self::assertSame(600.0, $fromWallet->getBalance());
         self::assertSame(TransactionStatus::REJECTED, $transaction->getStatus());
     }
 
-    public function testRejectSetsRejectedStatus(): void
+    public function testRejectRefundsSourceWalletAndSetsRejectedStatus(): void
     {
         $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
 
-        $wallet = $this->createStub(Wallet::class);
+        $wallet = Wallet::create(1, Currency::PLN);
+        $wallet->setBalance(400.0);
 
         $this->transactionRepository
             ->expects(self::once())
@@ -152,6 +156,8 @@ class TransactionProcessorServiceTest extends TestCase
 
         $this->transactionProcessorService->reject($transaction);
 
+        self::assertSame(500.0, $wallet->getBalance());
+        self::assertNotNull($wallet->getLastActivityAt());
         self::assertSame(TransactionStatus::REJECTED, $transaction->getStatus());
         self::assertNull($transaction->getAntiFraudCheckedAt());
     }

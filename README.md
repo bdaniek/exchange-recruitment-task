@@ -91,7 +91,7 @@ All endpoints require Bearer token authentication. Obtain a token with `app:crea
 | `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user.                                                                                                                                  |
 | `POST` | `/api/wallets`              | Create a new wallet. Body: `{ "currency": "PLN" }`. Supported currencies: `PLN`, `EUR`, `USD`, `GBP`, `JPY`, `CHF`, `HUF`. Returns `409` if a wallet for that currency already exists. |
 | `POST` | `/api/wallets/{id}/deposit` | Deposit funds into a wallet. Body: `{ "amount": "500.00" }`. Maximum single deposit: `10000`. Returns `422` if the wallet is blocked.                                                  |
-| `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`.                        |
+| `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`. The amount is reserved on the source wallet right away; the target wallet is credited when `app:process-transactions` completes the transfer, and a rejected transfer is refunded. |
 
 A ready-to-use Postman collection is available at [`exchange-api.postman_collection.json`](./exchange-api.postman_collection.json).
 Set the `authToken` variable to the token returned by `app:create-user`.
