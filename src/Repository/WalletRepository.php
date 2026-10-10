@@ -8,6 +8,7 @@ use App\Entity\Wallet;
 use App\Enum\Currency;
 use DateTimeImmutable;
 use DateTimeZone;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use ReflectionClass;
@@ -83,6 +84,23 @@ readonly class WalletRepository implements WalletRepositoryInterface
         }
 
         return $this->buildEntity($row);
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function lockByIds(int ...$ids): void
+    {
+        $qb = $this->connection->createQueryBuilder();
+
+        $qb
+            ->select('id')
+            ->from(self::TABLE_NAME)
+            ->where('id IN (:ids)')
+            ->orderBy('id')
+            ->forUpdate();
+
+        $this->connection->executeQuery($qb->getSQL(), ['ids' => $ids], ['ids' => ArrayParameterType::INTEGER]);
     }
 
     /**

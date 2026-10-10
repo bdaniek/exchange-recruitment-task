@@ -12,6 +12,7 @@ use App\Exception\WalletNotFoundException;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 
 readonly class TransferService
 {
@@ -22,6 +23,7 @@ readonly class TransferService
         private TransactionRepositoryInterface $transactionRepository,
         private ExchangeRateService $exchangeRateService,
         private SpreadService $spreadService,
+        private Connection $connection,
     ) {
     }
 
@@ -31,57 +33,61 @@ readonly class TransferService
         int $toWalletId,
         string $fromAmount,
     ): Transaction {
-        $fromWallet = $this->walletRepository->findById($fromWalletId);
-        if (null === $fromWallet || $fromWallet->getUserId() !== $userId) {
-            throw new WalletNotFoundException($fromWalletId);
-        }
+        return $this->connection->transactional(function () use ($userId, $fromWalletId, $toWalletId, $fromAmount): Transaction {
+            $this->walletRepository->lockByIds($fromWalletId, $toWalletId);
 
-        $toWallet = $this->walletRepository->findById($toWalletId);
-        if (null === $toWallet || $toWallet->getUserId() !== $userId) {
-            throw new WalletNotFoundException($toWalletId);
-        }
+            $fromWallet = $this->walletRepository->findById($fromWalletId);
+            if (null === $fromWallet || $fromWallet->getUserId() !== $userId) {
+                throw new WalletNotFoundException($fromWalletId);
+            }
 
-        if ($fromWallet->isBlocked()) {
-            throw new WalletBlockedException($fromWalletId);
-        }
+            $toWallet = $this->walletRepository->findById($toWalletId);
+            if (null === $toWallet || $toWallet->getUserId() !== $userId) {
+                throw new WalletNotFoundException($toWalletId);
+            }
 
-        if ($toWallet->isBlocked()) {
-            throw new WalletBlockedException($toWalletId);
-        }
+            if ($fromWallet->isBlocked()) {
+                throw new WalletBlockedException($fromWalletId);
+            }
 
-        if ((float) $fromAmount > $fromWallet->getBalance()) {
-            throw new InsufficientFundsException($fromWalletId);
-        }
+            if ($toWallet->isBlocked()) {
+                throw new WalletBlockedException($toWalletId);
+            }
 
-        $fromCurrency = $fromWallet->getCurrency();
-        $toCurrency = $toWallet->getCurrency();
+            if ((float) $fromAmount > $fromWallet->getBalance()) {
+                throw new InsufficientFundsException($fromWalletId);
+            }
 
-        $exchangeRate = $this->exchangeRateService->getExchangeRateBetween($fromCurrency, $toCurrency);
-        $rawToAmount = (float) $fromAmount * $exchangeRate;
-        $spread = $this->spreadService->calculateSpread($rawToAmount, $fromCurrency, $toCurrency);
-        $toAmount = $rawToAmount - (float) $spread;
+            $fromCurrency = $fromWallet->getCurrency();
+            $toCurrency = $toWallet->getCurrency();
 
-        $toAmountFormatted = number_format($toAmount, 4, '.', '');
+            $exchangeRate = $this->exchangeRateService->getExchangeRateBetween($fromCurrency, $toCurrency);
+            $rawToAmount = (float) $fromAmount * $exchangeRate;
+            $spread = $this->spreadService->calculateSpread($rawToAmount, $fromCurrency, $toCurrency);
+            $toAmount = $rawToAmount - (float) $spread;
 
-        $fromWallet->setBalance($fromWallet->getBalance() - (float) $fromAmount);
-        $fromWallet->setLastActivityAt(new DateTimeImmutable());
-        $this->walletRepository->save($fromWallet);
+            $toAmountFormatted = number_format($toAmount, 4, '.', '');
 
-        $transaction = Transaction::create(
-            fromWalletId: $fromWalletId,
-            toWalletId: $toWalletId,
-            fromAmount: $fromAmount,
-            toAmount: $toAmountFormatted,
-            fromCurrency: $fromCurrency,
-            toCurrency: $toCurrency,
-            spread: $spread,
-            exchangeRate: number_format($exchangeRate, 6, '.', ''),
-            requiresAntiFraudCheck: $this->exceedsAntiFraudLimit($fromAmount, $fromCurrency),
-        );
+            $fromWallet->setBalance($fromWallet->getBalance() - (float) $fromAmount);
+            $fromWallet->setLastActivityAt(new DateTimeImmutable());
+            $this->walletRepository->save($fromWallet);
 
-        $this->transactionRepository->save($transaction);
+            $transaction = Transaction::create(
+                fromWalletId: $fromWalletId,
+                toWalletId: $toWalletId,
+                fromAmount: $fromAmount,
+                toAmount: $toAmountFormatted,
+                fromCurrency: $fromCurrency,
+                toCurrency: $toCurrency,
+                spread: $spread,
+                exchangeRate: number_format($exchangeRate, 6, '.', ''),
+                requiresAntiFraudCheck: $this->exceedsAntiFraudLimit($fromAmount, $fromCurrency),
+            );
 
-        return $transaction;
+            $this->transactionRepository->save($transaction);
+
+            return $transaction;
+        });
     }
 
     private function exceedsAntiFraudLimit(string $fromAmount, Currency $fromCurrency): bool

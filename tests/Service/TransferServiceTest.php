@@ -16,6 +16,8 @@ use App\Repository\WalletRepositoryInterface;
 use App\Service\ExchangeRateService;
 use App\Service\SpreadService;
 use App\Service\TransferService;
+use Closure;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +43,7 @@ class TransferServiceTest extends TestCase
             $this->transactionRepository,
             $this->exchangeRateService,
             $this->spreadService,
+            $this->createConnection(),
         );
     }
 
@@ -71,6 +74,11 @@ class TransferServiceTest extends TestCase
             ->method('calculateSpread')
             ->with(250.0, Currency::PLN, Currency::EUR)
             ->willReturn('1.00');
+
+        $this->walletRepository
+            ->expects(self::once())
+            ->method('lockByIds')
+            ->with(1, 2);
 
         $this->walletRepository
             ->expects(self::once())
@@ -284,6 +292,7 @@ class TransferServiceTest extends TestCase
             $this->createStub(TransactionRepositoryInterface::class),
             new ExchangeRateService(),
             new SpreadService(),
+            $this->createConnection(),
         );
 
         $transaction = $transferService->transfer(1, 1, 2, $amount);
@@ -293,5 +302,15 @@ class TransferServiceTest extends TestCase
             $expected ? TransactionStatus::FRAUD_REVIEW : TransactionStatus::PENDING,
             $transaction->getStatus(),
         );
+    }
+
+    private function createConnection(): Connection
+    {
+        $connection = $this->createStub(Connection::class);
+        $connection
+            ->method('transactional')
+            ->willReturnCallback(static fn (Closure $operation): mixed => $operation($connection));
+
+        return $connection;
     }
 }

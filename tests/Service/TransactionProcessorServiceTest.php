@@ -12,6 +12,8 @@ use App\Repository\CompanyWalletRepositoryInterface;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\TransactionProcessorService;
+use Closure;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
@@ -33,6 +35,7 @@ class TransactionProcessorServiceTest extends TestCase
             $this->walletRepository,
             $this->transactionRepository,
             $this->companyWalletRepository,
+            $this->createConnection(),
         );
     }
 
@@ -52,6 +55,11 @@ class TransactionProcessorServiceTest extends TestCase
                 [1, $fromWallet],
                 [2, $toWallet],
             ]);
+
+        $this->walletRepository
+            ->expects(self::once())
+            ->method('lockByIds')
+            ->with(1, 2);
 
         $this->walletRepository
             ->expects(self::once())
@@ -184,6 +192,10 @@ class TransactionProcessorServiceTest extends TestCase
             ->with($transaction);
         $this->walletRepository
             ->expects($this->once())
+            ->method('lockByIds')
+            ->with(1);
+        $this->walletRepository
+            ->expects($this->once())
             ->method('findById')
             ->with(1)
             ->willReturn($wallet);
@@ -223,5 +235,15 @@ class TransactionProcessorServiceTest extends TestCase
             exchangeRate: '0.250000',
             requiresAntiFraudCheck: $requiresAntiFraudCheck,
         );
+    }
+
+    private function createConnection(): Connection
+    {
+        $connection = $this->createStub(Connection::class);
+        $connection
+            ->method('transactional')
+            ->willReturnCallback(static fn (Closure $operation): mixed => $operation($connection));
+
+        return $connection;
     }
 }

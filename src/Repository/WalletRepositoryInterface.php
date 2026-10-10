@@ -16,5 +16,7 @@ interface WalletRepositoryInterface
 
     public function findByUserIdAndCurrency(int $userId, Currency $currency): ?Wallet;
 
+    public function lockByIds(int ...$ids): void;
+
     public function save(Wallet $wallet): void;
 }

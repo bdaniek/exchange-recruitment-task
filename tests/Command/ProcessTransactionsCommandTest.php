@@ -13,6 +13,8 @@ use App\Repository\CompanyWalletRepositoryInterface;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\TransactionProcessorService;
+use Closure;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -77,6 +79,7 @@ class ProcessTransactionsCommandTest extends TestCase
             $walletRepository,
             $transactionRepository,
             $this->createStub(CompanyWalletRepositoryInterface::class),
+            $this->createConnection(),
         );
 
         return new CommandTester(new ProcessTransactionsCommand($transactionRepository, $processor));
@@ -95,5 +98,15 @@ class ProcessTransactionsCommandTest extends TestCase
             exchangeRate: '0.250000',
             requiresAntiFraudCheck: $requiresAntiFraudCheck,
         );
+    }
+
+    private function createConnection(): Connection
+    {
+        $connection = $this->createStub(Connection::class);
+        $connection
+            ->method('transactional')
+            ->willReturnCallback(static fn (Closure $operation): mixed => $operation($connection));
+
+        return $connection;
     }
 }

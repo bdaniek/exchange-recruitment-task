@@ -9,6 +9,7 @@ use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\WalletRepositoryInterface;
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 
 readonly class DepositService
 {
@@ -16,24 +17,29 @@ readonly class DepositService
 
     public function __construct(
         private WalletRepositoryInterface $walletRepository,
+        private Connection $connection,
     ) {
     }
 
     public function deposit(int $userId, int $walletId, string $amount): Wallet
     {
-        $wallet = $this->walletRepository->findById($walletId);
-        if (null === $wallet || $wallet->getUserId() !== $userId) {
-            throw new WalletNotFoundException($walletId);
-        }
+        return $this->connection->transactional(function () use ($userId, $walletId, $amount): Wallet {
+            $this->walletRepository->lockByIds($walletId);
 
-        if ($wallet->isBlocked()) {
-            throw new WalletBlockedException($walletId);
-        }
+            $wallet = $this->walletRepository->findById($walletId);
+            if (null === $wallet || $wallet->getUserId() !== $userId) {
+                throw new WalletNotFoundException($walletId);
+            }
 
-        $wallet->setBalance($wallet->getBalance() + (float) $amount);
-        $wallet->setLastActivityAt(new DateTimeImmutable());
-        $this->walletRepository->save($wallet);
+            if ($wallet->isBlocked()) {
+                throw new WalletBlockedException($walletId);
+            }
 
-        return $wallet;
+            $wallet->setBalance($wallet->getBalance() + (float) $amount);
+            $wallet->setLastActivityAt(new DateTimeImmutable());
+            $this->walletRepository->save($wallet);
+
+            return $wallet;
+        });
     }
 }

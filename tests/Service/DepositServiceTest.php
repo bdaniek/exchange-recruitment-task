@@ -10,6 +10,8 @@ use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\DepositService;
+use Closure;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
@@ -22,7 +24,7 @@ class DepositServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->walletRepository = $this->createMock(WalletRepositoryInterface::class);
-        $this->depositService = new DepositService($this->walletRepository);
+        $this->depositService = new DepositService($this->walletRepository, $this->createConnection());
     }
 
     public function testDepositSuccessfully(): void
@@ -35,6 +37,11 @@ class DepositServiceTest extends TestCase
             ->method('findById')
             ->with(1)
             ->willReturn($wallet);
+
+        $this->walletRepository
+            ->expects(self::once())
+            ->method('lockByIds')
+            ->with(1);
 
         $this->walletRepository
             ->expects(self::once())
@@ -114,5 +121,15 @@ class DepositServiceTest extends TestCase
         $this->expectExceptionMessage('Wallet 1 is blocked.');
 
         $this->depositService->deposit($userId, 1, '100.00');
+    }
+
+    private function createConnection(): Connection
+    {
+        $connection = $this->createStub(Connection::class);
+        $connection
+            ->method('transactional')
+            ->willReturnCallback(static fn (Closure $operation): mixed => $operation($connection));
+
+        return $connection;
     }
 }
