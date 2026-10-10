@@ -8,6 +8,8 @@ use App\Entity\Transaction;
 use App\Entity\Wallet;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Exception\InsufficientFundsException;
+use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
@@ -165,5 +167,90 @@ class TransferServiceTest extends TestCase
         $this->expectExceptionMessage('Wallet 2 not found.');
 
         $this->transferService->transfer(1, 1, 2, '100.00');
+    }
+
+    public function testTransferThrowsWhenFromWalletBlocked(): void
+    {
+        $fromWallet = Wallet::create(1, Currency::PLN);
+        $fromWallet->setBalance(500.0);
+        $fromWallet->setIsBlocked(true);
+
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, $fromWallet],
+                [2, Wallet::create(1, Currency::EUR)],
+            ]);
+
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletBlockedException::class);
+        $this->expectExceptionMessage('Wallet 1 is blocked.');
+
+        $this->transferService->transfer(1, 1, 2, '100.00');
+    }
+
+    public function testTransferThrowsWhenToWalletBlocked(): void
+    {
+        $fromWallet = Wallet::create(1, Currency::PLN);
+        $fromWallet->setBalance(500.0);
+        $toWallet = Wallet::create(1, Currency::EUR);
+        $toWallet->setIsBlocked(true);
+
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, $fromWallet],
+                [2, $toWallet],
+            ]);
+
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletBlockedException::class);
+        $this->expectExceptionMessage('Wallet 2 is blocked.');
+
+        $this->transferService->transfer(1, 1, 2, '100.00');
+    }
+
+    public function testTransferThrowsWhenBalanceIsTooLow(): void
+    {
+        $fromWallet = Wallet::create(1, Currency::PLN);
+        $fromWallet->setBalance(99.99);
+
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, $fromWallet],
+                [2, Wallet::create(1, Currency::EUR)],
+            ]);
+
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(InsufficientFundsException::class);
+        $this->expectExceptionMessage('Insufficient funds in wallet 1.');
+
+        $this->transferService->transfer(1, 1, 2, '100.00');
+    }
+
+    public function testTransferAllowsWholeBalance(): void
+    {
+        $fromWallet = Wallet::create(1, Currency::PLN);
+        $fromWallet->setBalance(100.0);
+
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, $fromWallet],
+                [2, Wallet::create(1, Currency::EUR)],
+            ]);
+        $this->exchangeRateService->method('getExchangeRateBetween')->willReturn(0.25);
+        $this->spreadService->method('calculateSpread')->willReturn('0.10');
+
+        $this->transferService->transfer(1, 1, 2, '100.00');
+
+        self::assertSame(0.0, $fromWallet->getBalance());
     }
 }

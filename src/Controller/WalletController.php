@@ -8,6 +8,7 @@ use App\Dto\TransactionResponse;
 use App\Dto\WalletResponse;
 use App\Entity\User;
 use App\Enum\Currency;
+use App\Exception\InsufficientFundsException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
@@ -88,6 +89,10 @@ final class WalletController extends AbstractController
             return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
         }
 
+        if ((int) $data['fromWalletId'] === (int) $data['toWalletId']) {
+            return new JsonResponse(['error' => 'Cannot transfer to the same wallet.'], Response::HTTP_BAD_REQUEST);
+        }
+
         try {
             $transaction = $this->transferService->transfer(
                 $user->getIdNotNull(),
@@ -97,6 +102,8 @@ final class WalletController extends AbstractController
             );
         } catch (WalletNotFoundException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (WalletBlockedException|InsufficientFundsException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         return new JsonResponse(new TransactionResponse($transaction), Response::HTTP_CREATED);
