@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Transaction;
+use App\Enum\Currency;
 use App\Exception\InsufficientFundsException;
 use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
@@ -14,6 +15,8 @@ use DateTimeImmutable;
 
 readonly class TransferService
 {
+    private const float ANTI_FRAUD_LIMIT_EUR = 15_000.0;
+
     public function __construct(
         private WalletRepositoryInterface $walletRepository,
         private TransactionRepositoryInterface $transactionRepository,
@@ -73,11 +76,18 @@ readonly class TransferService
             toCurrency: $toCurrency,
             spread: $spread,
             exchangeRate: number_format($exchangeRate, 6, '.', ''),
-            requiresAntiFraudCheck: $toAmount > 15_000,
+            requiresAntiFraudCheck: $this->exceedsAntiFraudLimit($fromAmount, $fromCurrency),
         );
 
         $this->transactionRepository->save($transaction);
 
         return $transaction;
+    }
+
+    private function exceedsAntiFraudLimit(string $fromAmount, Currency $fromCurrency): bool
+    {
+        $amountInEur = (float) $fromAmount * $this->exchangeRateService->getExchangeRateBetween($fromCurrency, Currency::EUR);
+
+        return $amountInEur > self::ANTI_FRAUD_LIMIT_EUR;
     }
 }

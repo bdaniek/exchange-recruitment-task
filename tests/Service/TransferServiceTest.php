@@ -17,6 +17,7 @@ use App\Service\ExchangeRateService;
 use App\Service\SpreadService;
 use App\Service\TransferService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[AllowMockObjectsWithoutExpectations]
@@ -60,7 +61,7 @@ class TransferServiceTest extends TestCase
             ]);
 
         $this->exchangeRateService
-            ->expects(self::once())
+            ->expects(self::exactly(2))
             ->method('getExchangeRateBetween')
             ->with(Currency::PLN, Currency::EUR)
             ->willReturn(0.25);
@@ -252,5 +253,45 @@ class TransferServiceTest extends TestCase
         $this->transferService->transfer(1, 1, 2, '100.00');
 
         self::assertSame(0.0, $fromWallet->getBalance());
+    }
+
+    public static function antiFraudProvider(): iterable
+    {
+        yield 'EUR exactly at the limit' => [Currency::EUR, Currency::PLN, '15000', false];
+        yield 'EUR above the limit' => [Currency::EUR, Currency::PLN, '15000.01', true];
+        yield 'PLN below the limit' => [Currency::PLN, Currency::EUR, '63000', false];
+        yield 'PLN above the limit' => [Currency::PLN, Currency::EUR, '64000', true];
+        yield 'GBP above the limit in EUR' => [Currency::GBP, Currency::EUR, '14000', true];
+        yield 'small EUR amount to HUF' => [Currency::EUR, Currency::HUF, '100', false];
+    }
+
+    #[DataProvider('antiFraudProvider')]
+    public function testAntiFraudLimitIsCheckedInEur(Currency $from, Currency $to, string $amount, bool $expected): void
+    {
+        $fromWallet = Wallet::create(1, $from);
+        $fromWallet->setBalance(1_000_000.0);
+
+        $walletRepository = $this->createStub(WalletRepositoryInterface::class);
+        $walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [1, $fromWallet],
+                [2, Wallet::create(1, $to)],
+            ]);
+
+        $transferService = new TransferService(
+            $walletRepository,
+            $this->createStub(TransactionRepositoryInterface::class),
+            new ExchangeRateService(),
+            new SpreadService(),
+        );
+
+        $transaction = $transferService->transfer(1, 1, 2, $amount);
+
+        self::assertSame($expected, $transaction->requiresAntiFraudCheck());
+        self::assertSame(
+            $expected ? TransactionStatus::FRAUD_REVIEW : TransactionStatus::PENDING,
+            $transaction->getStatus(),
+        );
     }
 }
